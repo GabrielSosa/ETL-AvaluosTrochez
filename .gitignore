@@ -1,0 +1,28 @@
+# Entornos virtuales
+etl_env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Archivos de configuración y variables de entorno
+.env
+
+# Archivos de bases de datos y formatos específicos
+*.dbf
+*.adx
+*.apr
+
+# Archivos de sistema
+.DS_Store
+
+# Archivos de logs
+test.log
+*.log
+
+# Otros archivos temporales
+*.swp
+*.swo
+
+# Carpeta de bases de datos (si no quieres subirla)
+BaseDatos 15-07-2025/ 
