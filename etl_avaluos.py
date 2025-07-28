@@ -79,7 +79,11 @@ class ETLAvaluos:
                 "RUEDAS",
                 "SIST_ELECT",
                 "SISTELEC2",
-                "INTYACC2"
+                "INTYACC2", 
+                "INTERIOR_Y",
+                "MOTOR2",
+                "CARROCERI2",
+                "MOTOR_"
             FROM public.mi_tabla
             WHERE "id_unico" IS NOT NULL
             """
@@ -141,17 +145,32 @@ class ETLAvaluos:
             
         try:
             if isinstance(fecha, str):
+                # Limpiar espacios y caracteres extra
+                fecha_limpia = fecha.strip()
+                
                 # Intentar diferentes formatos de fecha
                 formatos = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%Y/%m/%d']
                 for formato in formatos:
                     try:
-                        return datetime.strptime(fecha, formato).date()
+                        # Usar datetime.strptime y extraer solo la fecha sin conversión de zona horaria
+                        dt = datetime.strptime(fecha_limpia, formato)
+                        # Crear fecha directamente sin conversión
+                        fecha_resultado = dt.date()
+                        logger.info(f"📅 Fecha convertida: '{fecha_limpia}' -> {fecha_resultado} (formato: {formato})")
+                        return fecha_resultado
                     except ValueError:
                         continue
+                
+                logger.warning(f"⚠️ No se pudo convertir fecha: '{fecha}'")
                 return None
+            elif isinstance(fecha, datetime):
+                return fecha.date()
+            elif isinstance(fecha, pd.Timestamp):
+                return fecha.date()
             else:
                 return fecha
-        except:
+        except Exception as e:
+            logger.warning(f"⚠️ Error procesando fecha '{fecha}': {e}")
             return None
     
     def validar_datos_insercion(self, datos):
@@ -223,7 +242,7 @@ class ETLAvaluos:
             return None
     
     def procesar_deducciones(self, df_origen, vehicle_appraisal_ids):
-        """Procesar deducciones y crear filas para appraisal_deductions"""
+        """Procesar deducciones y crear filas para appraisal_deductions según el mapeo especificado"""
         try:
             deducciones = []
             
@@ -232,42 +251,46 @@ class ETLAvaluos:
             
             # Log para ver qué datos están llegando de los campos de deducciones
             logger.info(f"📊 Muestra de MOTOR1: {df_origen['MOTOR1'].head(3).tolist()}")
-            logger.info(f"📊 Muestra de MOTOR2: {df_origen['MOTOR2'].head(3).tolist()}")
             logger.info(f"📊 Muestra de TRANSMISIO: {df_origen['TRANSMISIO'].head(3).tolist()}")
-            logger.info(f"📊 Muestra de TRANSMICIO: {df_origen['TRANSMICIO'].head(3).tolist()}")
-            logger.info(f"📊 Campos no nulos MOTOR1: {df_origen['MOTOR1'].notna().sum()}")
-            logger.info(f"📊 Campos no nulos MOTOR2: {df_origen['MOTOR2'].notna().sum()}")
+            logger.info(f"📊 Muestra de SUSPENSION: {df_origen['SUSPENSION'].head(3).tolist()}")
+            logger.info(f"📊 Muestra de DIRECCION: {df_origen['DIRECCION'].head(3).tolist()}")
+            logger.info(f"📊 Muestra de FRENOS: {df_origen['FRENOS'].head(3).tolist()}")
+            logger.info(f"📊 Muestra de LLANTAS: {df_origen['LLANTAS'].head(3).tolist()}")
+            logger.info(f"📊 Muestra de SIST_ELECT: {df_origen['SIST_ELECT'].head(3).tolist()}")
+            logger.info(f"📊 Muestra de INTERIOR_Y: {df_origen['INTERIOR_Y'].head(3).tolist()}")
             
-            # Buscar registros con deducciones válidas
-            registros_con_deducciones = df_origen[
-                (df_origen['MOTOR1'].notna() & (df_origen['MOTOR1'] != 0)) |
-                (df_origen['TRANSMISIO'].notna() & (df_origen['TRANSMISIO'] != 0))
-            ]
-            logger.info(f"🔍 Registros con deducciones válidas: {len(registros_con_deducciones)}")
+            # Log de campos nulos para diagnóstico
+            campos_deducciones = ['MOTOR1', 'TRANSMISIO', 'SUSPENSION', 'DIRECCION', 'FRENOS', 'LLANTAS', 'SIST_ELECT', 'INTERIOR_Y']
+            for campo in campos_deducciones:
+                if campo in df_origen.columns:
+                    nulos = df_origen[campo].isna().sum()
+                    no_nulos = df_origen[campo].notna().sum()
+                    logger.info(f"📊 Campo {campo}: {no_nulos} no nulos, {nulos} nulos")
+                else:
+                    logger.warning(f"⚠️ Campo {campo} no encontrado en el DataFrame")
             
-            if len(registros_con_deducciones) > 0:
-                logger.info(f"📋 Ejemplos de deducciones:")
-                for idx, row in registros_con_deducciones.head(3).iterrows():
-                    if pd.notna(row['MOTOR1']) and row['MOTOR1'] != 0:
-                        logger.info(f"  - MOTOR1: {row['MOTOR1']} -> {row['MOTOR2']}")
-                    if pd.notna(row['TRANSMISIO']) and row['TRANSMISIO'] != 0:
-                        logger.info(f"  - TRANSMISIO: {row['TRANSMISIO']} -> {row['TRANSMICIO']}")
-            
-            # Mapeo de campos de deducciones
+            # Mapeo correcto según la tabla proporcionada
+            # Descripción (text) -> Valor (float8)
             mapeo_deducciones = [
-                ('MOTOR1', 'MOTOR2', 'Motor'),
-                ('TRANSMISIO', 'TRANSMICIO', 'Transmisión'),
-                ('SUSPENSION', 'SUSPENSIO2', 'Suspensión'),
-                ('DIRECCION', 'DIRECCION2', 'Dirección'),
-                ('FRENOS', 'FRENOS2', 'Frenos'),
-                ('LLANTAS', 'RUEDAS', 'Llantas'),
-                ('SIST_ELECT', 'SISTELEC2', 'Sistema Eléctrico'),
-                (None, 'INTYACC2', 'Interior y Accesorios')  # Solo descripción
+                ('MOTOR1', 'MOTOR_', ''),
+                ('TRANSMISIO', 'TRANSMICIO', ''),
+                ('SUSPENSION', 'CARROCERI2', ''),
+                ('DIRECCION', 'DIRECCION2', ''),
+                ('FRENOS', 'FRENOS2', ''),
+                ('LLANTAS', 'RUEDAS', ''),
+                ('SIST_ELECT', 'SISTELEC2', ''),
+                ('INTERIOR_Y', 'INTYACC2', '')
             ]
+            
+            # Contador para estadísticas
+            total_deducciones = 0
+            deducciones_con_monto = 0
+            deducciones_con_descripcion = 0
             
             for index, row in df_origen.iterrows():
                 id_unico = row['id_unico']
                 vehicle_appraisal_id = vehicle_appraisal_ids.get(id_unico)
+                
                 if vehicle_appraisal_id is None:
                     logger.debug(f"⚠️ No se encontró vehicle_appraisal_id para id_unico: {id_unico}")
                     continue
@@ -276,30 +299,46 @@ class ETLAvaluos:
                     amount = None
                     description = None
                     
-                    # Procesar campo de monto (float)
-                    if campo_amount:
-                        amount = self.limpiar_numero(row[campo_amount], 'float')
+                    # Procesar campo de monto (float8) - solo si el campo existe y no es nan
+                    if campo_amount and campo_amount in row.index:
+                        valor_campo = row[campo_amount]
+                        if pd.notna(valor_campo) and valor_campo is not None:
+                            amount = self.limpiar_numero(valor_campo, 'float')
+                            if amount is not None and amount > 0:
+                                deducciones_con_monto += 1
                     
-                    # Procesar campo de descripción (text)
-                    if campo_desc:
-                        description = self.limpiar_texto(row[campo_desc])
+                    # Procesar campo de descripción (text) - solo si el campo existe y no es nan
+                    if campo_desc and campo_desc in row.index:
+                        valor_campo = row[campo_desc]
+                        if pd.notna(valor_campo) and valor_campo is not None:
+                            description = self.limpiar_texto(valor_campo)
+                            if description and description != '':
+                                deducciones_con_descripcion += 1
                     
-                    # Solo crear fila si hay al menos un valor no vacío
-                    if amount is not None or (description and description != ''):
-                        # Si amount es None o NaN, poner 0
-                        if amount is None or (isinstance(amount, float) and pd.isna(amount)):
+                    # Crear deducción solo si hay monto válido o descripción válida
+                    tiene_monto_valido = amount is not None and amount > 0
+                    tiene_descripcion_valida = description and description != ''
+                    
+                    if tiene_monto_valido or tiene_descripcion_valida:
+                        # Si amount es None o 0, poner 0
+                        if amount is None or amount <= 0:
                             amount = 0
+                        
                         deduccion = {
                             'vehicle_appraisal_id': vehicle_appraisal_id,
                             'amount': amount,
                             'description': description if description and description != '' else descripcion_base
                         }
                         deducciones.append(deduccion)
-                        logger.debug(f"➕ Deducción agregada: {descripcion_base} - Amount: {amount}, Description: {description}")
+                        total_deducciones += 1
+                        
+                        logger.debug(f"➕ Deducción: {descripcion_base} - Amount: {amount}, Description: '{description}'")
             
             logger.info(f"✅ Procesadas {len(deducciones)} deducciones válidas")
+            logger.info(f"📊 Deducciones con monto > 0: {deducciones_con_monto}")
+            logger.info(f"📊 Deducciones con descripción: {deducciones_con_descripcion}")
             logger.info(f"📊 Total de registros procesados: {len(df_origen)}")
-            logger.info(f"📊 Registros con vehicle_appraisal_id encontrado: {len([r for r in df_origen.iterrows() if vehicle_appraisal_ids.get(r[1]['id_unico']) is not None])}")
+            
             return deducciones
             
         except Exception as e:
@@ -425,7 +464,10 @@ class ETLAvaluos:
                 lambda x: self.limpiar_numero(x, 'float')
             )
             
+            # Log para diagnosticar fechas
+            logger.info(f"📊 Muestra de _FECHAS_1 original: {df_origen['_FECHAS_1'].head(5).tolist()}")
             df_transformado['appraisal_date'] = df_origen['_FECHAS_1'].apply(self.limpiar_fecha)
+            logger.info(f"📊 Muestra de appraisal_date transformado: {df_transformado['appraisal_date'].head(5).tolist()}")
             
             df_transformado['apprasail_value_lower_cost'] = df_origen['AVALUO_DIS'].apply(
                 lambda x: self.limpiar_numero(x, 'float')
